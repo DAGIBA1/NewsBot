@@ -1,12 +1,11 @@
-"""Reddit 抓取模組 — 從指定看板取得熱門貼文。"""
+"""Reddit 抓取模組 — 透過公開 JSON endpoint 從指定看板取得熱門貼文（免 API Key）。"""
 
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 
-import praw
+import requests
 
 from config import (
     CATEGORY_EMOJI,
@@ -16,6 +15,10 @@ from config import (
 )
 
 logger = logging.getLogger(__name__)
+
+REDDIT_JSON_URL = "https://www.reddit.com/r/{subreddit}/top.json"
+USER_AGENT = "newsbot/1.0 (Reddit Daily Digest Bot)"
+REQUEST_TIMEOUT = 15
 
 
 @dataclass
@@ -40,45 +43,52 @@ class CategoryPosts:
     posts: list[RedditPost] = field(default_factory=list)
 
 
-def _create_reddit_client() -> praw.Reddit:
-    """建立 Reddit API 客戶端。"""
-    return praw.Reddit(
-        client_id=os.getenv("REDDIT_CLIENT_ID"),
-        client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
-        user_agent=os.getenv("REDDIT_USER_AGENT", "newsbot/1.0"),
-    )
-
-
 def fetch_top_posts(
-    reddit: praw.Reddit,
     subreddit_name: str,
     limit: int = POSTS_PER_SUBREDDIT,
     sent_ids: set[str] | None = None,
+    session: requests.Session | None = None,
 ) -> list[RedditPost]:
     """抓取指定看板的熱門貼文，自動跳過已推播的文章。"""
     sent_ids = sent_ids or set()
     posts: list[RedditPost] = []
 
+    if session is None:
+        session = requests.Session()
+        session.headers.update({"User-Agent": USER_AGENT})
+
     try:
-        subreddit = reddit.subreddit(subreddit_name)
-        # 多抓一些以補足被去重複過濾掉的文章
-        for submission in subreddit.top(time_filter=TIME_FILTER, limit=limit + len(sent_ids)):
-            if submission.id in sent_ids:
-                logger.debug("跳過已推播文章: %s", submission.id)
+        url = REDDIT_JSON_URL.format(subreddit=subreddit_name)
+        resp = session.get(
+            url,
+            params={"t": TIME_FILTER, "limit": limit + len(sent_ids)},
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        for child in data.get("data", {}).get("children", []):
+            post_data = child.get("data", {})
+            post_id = post_data.get("id", "")
+
+            if post_id in sent_ids:
+                logger.debug("跳過已推播文章: %s", post_id)
                 continue
+
             posts.append(
                 RedditPost(
-                    post_id=submission.id,
-                    title=submission.title,
-                    selftext=submission.selftext or "",
-                    url=submission.url,
-                    score=submission.score,
+                    post_id=post_id,
+                    title=post_data.get("title", ""),
+                    selftext=post_data.get("selftext", ""),
+                    url=post_data.get("url", ""),
+                    score=post_data.get("score", 0),
                     subreddit=subreddit_name,
-                    permalink=f"https://reddit.com{submission.permalink}",
+                    permalink=f"https://reddit.com{post_data.get('permalink', '')}",
                 )
             )
             if len(posts) >= limit:
                 break
+
     except Exception:
         logger.exception("抓取 r/%s 失敗，跳過此看板", subreddit_name)
 
@@ -86,12 +96,11 @@ def fetch_top_posts(
 
 
 def fetch_all_categories(
-    reddit: praw.Reddit | None = None,
     sent_ids: set[str] | None = None,
 ) -> list[CategoryPosts]:
     """遍歷所有分類看板，回傳結構化資料。"""
-    if reddit is None:
-        reddit = _create_reddit_client()
+    session = requests.Session()
+    session.headers.update({"User-Agent": USER_AGENT})
 
     results: list[CategoryPosts] = []
 
@@ -101,7 +110,7 @@ def fetch_all_categories(
             emoji=CATEGORY_EMOJI.get(category, ""),
         )
         for sub_name in subreddits:
-            cat.posts.extend(fetch_top_posts(reddit, sub_name, sent_ids=sent_ids))
+            cat.posts.extend(fetch_top_posts(sub_name, sent_ids=sent_ids, session=session))
         results.append(cat)
 
     return results
