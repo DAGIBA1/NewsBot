@@ -114,6 +114,6 @@ class TestFetchAllCategories:
 
         results = fetch_all_categories()
 
-        assert len(results) == 4  # 4 個分類都有回傳
+        assert len(results) == 5  # 5 個分類都有回傳
         assert all(isinstance(r, CategoryPosts) for r in results)
         assert results[0].category == "AI 應用"

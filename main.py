@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 from config import SENT_POSTS_FILE
 from reddit_scraper import fetch_all_categories
-from ai_processor import summarize_post
+from ai_processor import summarize_posts
 from notifier import dispatch_reports
 
 load_dotenv()
@@ -59,12 +59,15 @@ def main() -> None:
         logger.info("今日無新貼文，結束執行")
         return
 
-    # 3. 透過 Gemini AI 翻譯摘要
+    # 3. 透過 Gemini AI 批次翻譯摘要（每個分類 1 次 API 呼叫）
     new_ids: set[str] = set()
     for cat in categories:
-        for post in cat.posts:
-            logger.info("摘要中: [%s] %s", post.subreddit, post.title[:50])
-            post.summary = summarize_post(post.title, post.selftext)  # type: ignore[attr-defined]
+        if not cat.posts:
+            continue
+        logger.info("批次摘要: %s（%d 篇）", cat.category, len(cat.posts))
+        summaries = summarize_posts(cat.posts)
+        for post, summary in zip(cat.posts, summaries):
+            post.summary = summary  # type: ignore[attr-defined]
             new_ids.add(post.post_id)
 
     # 4. 推播至 Telegram

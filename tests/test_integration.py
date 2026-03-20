@@ -23,7 +23,7 @@ def _make_post(post_id: str, sub: str = "TestSub") -> RedditPost:
 
 class TestIntegration:
     @patch("main.dispatch_reports")
-    @patch("main.summarize_post")
+    @patch("main.summarize_posts")
     @patch("main.fetch_all_categories")
     def test_full_pipeline(self, mock_fetch, mock_summarize, mock_dispatch, tmp_path):
         """驗證 scraper → processor → notifier 的完整資料流。"""
@@ -35,7 +35,10 @@ class TestIntegration:
                 posts=[_make_post("p1", "LocalLLaMA"), _make_post("p2", "ChatGPTPro")],
             ),
         ]
-        mock_summarize.return_value = "[測試標題]\n- 重點 1\n- 重點 2\n- 重點 3"
+        mock_summarize.return_value = [
+            "[測試標題一]\n- 重點 1\n- 重點 2\n- 重點 3",
+            "[測試標題二]\n- 重點 A\n- 重點 B\n- 重點 C",
+        ]
 
         # 設定臨時的 sent_posts.json
         sent_file = tmp_path / "sent_posts.json"
@@ -47,7 +50,7 @@ class TestIntegration:
 
         # 驗證各模組被正確呼叫
         mock_fetch.assert_called_once()
-        assert mock_summarize.call_count == 2  # 2 篇貼文
+        assert mock_summarize.call_count == 1  # 1 個分類 = 1 次批次呼叫
         mock_dispatch.assert_called_once()
 
         # 驗證去重複記錄已更新

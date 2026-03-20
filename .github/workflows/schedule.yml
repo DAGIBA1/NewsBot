@@ -2,8 +2,8 @@ name: Daily NewsBot
 
 on:
   schedule:
-    # 每日 UTC 00:00（台灣時間 08:00）
-    - cron: '0 0 * * *'
+    # 每日 UTC 01:00（台灣時間 09:00）
+    - cron: '0 1 * * *'
   workflow_dispatch:
 
 jobs:
@@ -34,6 +34,7 @@ jobs:
           TELEGRAM_CHANNEL_INVEST: ${{ secrets.TELEGRAM_CHANNEL_INVEST }}
           TELEGRAM_CHANNEL_CRYPTO: ${{ secrets.TELEGRAM_CHANNEL_CRYPTO }}
           TELEGRAM_CHANNEL_GEO: ${{ secrets.TELEGRAM_CHANNEL_GEO }}
+          TELEGRAM_CHANNEL_ACTUARY: ${{ secrets.TELEGRAM_CHANNEL_ACTUARY }}
         run: uv run python main.py
 
       - name: Commit deduplication data
