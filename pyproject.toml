@@ -1,0 +1,18 @@
+[project]
+name = "newsbot"
+version = "0.1.0"
+description = "每日 Reddit 資訊監控與 AI 翻譯推播機器人"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "praw>=7.8",
+    "google-genai>=1.0",
+    "requests>=2.32",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.14",
+]
